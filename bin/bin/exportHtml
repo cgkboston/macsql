@@ -1,0 +1,141 @@
+#!/bin/tcsh
+# export the specified data file.
+if ($# < 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (! -f $MACSQL_HOME/db/tables/$1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+cd $MACSQL_HOME/db/data
+set table = $1
+set w = `wc -l $table | awk '{print $1}'`
+if (! -d ~/Desktop/MakeMoney) then
+   mkdir ~/Desktop/MakeMoney
+endif
+if (! -d ~/Desktop/MakeMoney/exports) then
+   mkdir ~/Desktop/MakeMoney/exports
+endif
+if (! -d ~/Desktop/MakeMoney/exports/html) then
+   mkdir ~/Desktop/MakeMoney/exports/html
+endif
+
+set html = "$table.`date +%Y%m%d.%H%M%S`.html"
+echo \<\!DOCTYPE\ html\ PUBLIC\ \"\-\/\/W3C\/\/DTD\ XHTML\ 1.0\ Transitional\/\/EN\" > $html
+echo \"http\:\/\/www.w3.org\/TR\/xhtml1\/DTD\/xhtml1-transitional.dtd\"\> >> $html
+echo \<html\ xmlns=\"http\:\/\/www.w3.org\/1999\/xhtml\"\ xml\:lang=\"en-us\"\> >> $html
+echo "<head>" >> $html
+echo "<title>Macsql Html Export $table</title>" >> $html
+echo \<link\ rel=\"stylesheet\"\ href=\"css\/jq.css\"\ type=\"text\/css\"\ media=\"print,\ projection,\ screen\"\ \/\> >> $html
+echo \<link\ rel=\"stylesheet\"\ href=\"http\:\/\/tablesorter.com\/themes\/blue\/style.css\"\ type=\"text\/css\"\ media=\"print,\ projection,\ screen\"\ \/\>>> $html
+echo \<script\ type=\"text\/javascript\"\ src=\"http\:\/\/tablesorter.com\/jquery\-latest.js\"\>\<\/script\> >> $html
+echo \<script\ type=\"text\/javascript\"\ src=\"http\:\/\/tablesorter.com\/__jquery.tablesorter.min.js\"\>\<\/script\> >> $html
+echo \<script\ type=\"text\/javascript\"\ src=\"js\/chili\/chili-1.8b.js\"\>\<\/script\> >> $html
+echo \<script\ type=\"text\/javascript\"\ src=\"js\/docs.js\"\>\<\/script\> >> $html
+echo \<script\ type=\"text\/javascript\"\> >> $html
+echo \$\(function\(\)\ \{ >> $html
+echo \$\(\"\#tablesorter-demo\"\).tablesorter\(\{sortList\:\[\[0,0\],\[2,1\]\],\ widgets\:\ \[\'zebra\'\]\}\)\; >> $html
+echo \$\(\"\#options\"\).tablesorter\(\{sortList\:\ \[\[0,0\]\],\ headers\:\ \{\ 3\:\{sorter\:\ false\},\ 4\:\{sorter\:\ false\}\}\}\)\; >> $html
+echo \}\)\; >> $html
+echo "</script>" >> $html
+echo "</head>" >> $html
+echo "<body>" >> $html
+echo \<div\ id=\"main\"\> >> $html
+echo \<p\ class=\"tip\ please\"\> >> $html
+echo "This page created with tablesorter.js by <em>cgk enterprises</em>" >> $html
+echo "</p>" >> $html
+echo \<a\ name=\"Demo\"\>\<\/a\> >> $html
+echo \<h1\>Macsql ExportHtml Demo\<\/h1\> >> $html
+echo \<table\ id=\"tablesorter\-demo\"\ class=\"tablesorter\"\ border=\"0\"\ cellpadding=\"0\"\ cellspacing=\"1\"\> >> $html
+
+set fieldCount = `cat $MACSQL_HOME/db/tables/$table |awk -F"," '{print NF}'`
+set labels = `head -1 $MACSQL_HOME/db/tables/$table|awk '{print substr($0,1)}'`
+set count = 0
+echo \<colgroup\> >> $html
+while ($count < $fieldCount)
+    @ count++
+    set label = `echo $labels,$count|awk -F"," '{print $($NF)}'|awk '{print $1}'`
+    echo \	\<col\ id=\"$label\"\/\> >> $html
+end
+echo \</colgroup\> >> $html
+
+# Print header row
+echo "<thead>" >> $html
+echo "<tr>" >> $html
+#echo \<table border=\"1\" class=\"macsql sortable\"\> >> $html
+#echo \<tr\> >> $html
+set count = 0
+while ($count < $fieldCount)
+    @ count++
+    set label = `echo $labels,$count|awk -F"," '{print $($NF)}'|awk '{print $1}'`
+##    echo \<th width=75\>$label\<\/th\> >> $html
+    echo \<th\>$label\<\/th\> >> $html
+end
+echo \<\/tr\> >> $html
+echo "</thead>" >> $html
+echo "<tbody>" >> $html
+pwd
+set datatypes = `head -1 ../tables/$table`
+set w = `wc -l $table|awk '{print $1}'`
+set x = 0
+set y = 0
+echo -n '    '
+foreach row (`cat $table`)
+    echo row is $row
+    @ x++
+    set p = `echo $x 100 \* $w \/ p | dc`
+    if ($p < 10) then
+	echo -n '. .'$p\%
+    else
+	echo -n '..'$p\%
+    endif
+    @ y++
+    if ($y == 1) then
+	echo -n \-
+    else if ($y == 2) then
+	echo -n \\
+    else if ($y == 3) then
+	echo -n \|
+    else if ($y == 4) then
+	echo -n \/
+    else if ($y == 5) then 
+	echo -n \-
+    else if ($y == 6) then
+	echo -n \\
+    else if ($y == 7) then
+	echo -n \|
+    else if ($y == 8) then
+	echo -n \/
+	set y = 0
+    endif
+    ech' -n '
+    echo -n \<tr\> >> $html
+    set colCnt = 0
+    foreach value (`echo $row | sed -e 's/,/ /g'`)
+	@ colCnt++
+	set label = `echo $labels,$colCnt|awk -F"," '{print $($NF)}'|awk '{print $1}'`
+	set datatype = `echo $datatypes,$colCnt | awk -F"," '{print $($NF)}' | awk '{print $2}' | sed -e 's/)//'`
+	if ($datatype == datetime) then
+	    set value = `echo $value | awk -F"%20" '{printf("%s %s %02d %s %s %d",$1,$2,$3,$4,$5,$6)}'`
+	endif
+	set value = `echo $value | sed -e 's/%20/ /g' | sed -e 's/\"//g'`
+	if ($label == company) then
+	    set value = `echo $value | sed -e 's/\.\./saveDots/g' | sed -e 's/\./ /g' | sed -e 's/saveDots/\./g'`
+	endif
+	echo -n \<td\ id=\"$label\"\> >> $html
+	echo -n $value |& sed -e 's/\&/\&amp\;/g' | sed -e 's/\</\&lt\;/g' | sed -e 's/\>/\&gt\;/g' | awk '{printf("%s",$0)}' >> $html
+	echo -n \<\/td\> >> $html
+#	echo -n "<td id=$label>$value</td>"
+    end
+    echo \<\/tr\> >> $html
+#    echo \<\/tr\>
+end
+echo \<\/tbody\> >> $html
+echo \</table\> >> $html
+echo  \<\/div\> >> $html
+echo \<\/body\> >> $html
+echo \<\/html\> >> $html
+mv $html ~/Desktop/MakeMoney/exports/html/$html
+cd $MACSQL_HOME/bin
+exit 0
