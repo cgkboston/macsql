@@ -1,0 +1,156 @@
+#!/bin/tcsh
+# For now update will be simply a select, delete, insert (where the insert
+# simply changes the update values to the new values.  See below, simple
+# enough.
+# Actually this is more efficient than the simple select, delete, insert 
+# because it harnesses the power of the unix awk utility to print the updated
+# data stream to the new data file, no need to delete and reinsert, awk does 
+# the update !!!
+set parameters = `echo $* | sed -e 's/ ,/,/g' | sed -e 's/,/, /g'`
+set inQuotes = 0
+set newParms = 
+foreach value ($parameters)
+    if ($inQuotes == 1) then
+	set newParms = `echo $newParms\%20$value`
+	echo $value | grep \" >& /dev/null	
+	if ($status == 0) then
+	    set inQuotes = 0
+	endif # -2
+    else
+	set newParms = `echo $newParms $value`
+	echo $value | grep \" >& /dev/null
+	if ($status == 0) then 
+	    set countQuotes = `echo $value | awk -F\" '{print NF}'`
+	    if ($countQuotes < 3) then
+		set inQuotes = 1 
+	    endif # -2
+	endif # -5
+    endif # -15
+end
+set parameters = "$newParms"
+if ($#argv > 2) then
+    if ($argv[2] != set) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else if (! -f $MACSQL_HOME/db/data/$argv[1]) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else
+	set table = $MACSQL_HOME/db/data/$argv[1]
+	set def = $MACSQL_HOME/db/tables/$argv[1]
+	set tbdef = `cat $def`
+	set whereLoc = 3
+	set where = 
+	set numfields = `echo $parameters | awk '{print NF}'`
+# changing this failed.
+	set updates = `echo $parameters | awk -F"where" '{print $1}'`
+	if ("$updates" == "") then
+	    set updates = $parameters
+	endif # -2
+	set updates = `echo $updates | awk -F"set" '{print $2}'`
+######################
+# set the where clause
+######################
+	set whereParms = `echo $parameters | awk -F\ where\  '{print $2}'`
+	set tablename = $argv[1]
+	set where = `$MACSQL_HOME/bin/bin/setWhere $tablename where $whereParms`
+#	echo where is $where
+	if ($where == 1) then
+	    set negateWhere = 0
+	else
+	    set negateWhere = \!\($where\)
+	endif # -4
+####################
+# set the set values
+####################
+	set newSet = 
+	set tabLabels = `echo $tbdef | awk -F"," '{print NF}'`
+	set labelCounter = 0
+
+#	set numfieldsDefined = `echo $tbdef | awk -F"," '{print NF}'`
+	set spec = 
+#	set count = 0
+	set fields = `cat $def |sed -e s/\(//g | sed -e s/\)//g | sed -e 's/,/ /g'`
+	while ($labelCounter < $tabLabels)
+	    @ labelCounter++
+	    if ($labelCounter == 1) then
+		set field = `echo $tbdef,$labelCounter|awk -F"," '{print substr($1,2)}'`
+	    else
+		set field = `echo $tbdef,$labelCounter|awk -F"," '{print $($NF)}'`
+	    endif # -4
+	    set field = `echo $field | awk '{print $1}'`
+	    set itemNum = 0
+	    set itemValue = 
+	    foreach item ($updates)
+		if (("$item" == "=") || ("$item" == ",") || $itemValue != ) then
+		    continue
+		endif # -2
+		if ($item == $field) then
+		    set itemNum = $labelCounter
+		else if ($itemNum != 0) then
+		    set itemValue = $item
+		endif # -4
+	    end
+	    set fieldType = `echo $labelCounter 2 \* p | dc`
+	    set fieldType = $fields[$fieldType]
+	    if (`echo $fieldType | egrep '(varchar|string)' | wc -l` > 0) then
+		set addQuote = quote
+		set addbs = 
+	    else
+		set addQuote = 
+		set addbs = \\
+	    endif
+	    if ("$itemValue" != "") then
+		set itemEnd = `echo $itemValue | awk '{print substr($1,length($1),1)}'`
+		if ($itemEnd == ,) then
+		    set itemValue = `echo $itemValue | awk '{print substr($1,1,length($1)-1)}'`
+		endif # -2
+		if ($itemValue == sysdate) then
+		    set itemValue = `$MACSQL_HOME/bin/bin/getDate`
+		    set itemValue = \"$itemValue\"
+#		    echo itemValue is $itemValue
+		endif
+#		echo itemValue is $itemValue
+		set newItemValue = `echo $itemValue | sed -e s/\\./$addbs\\./g`
+#		echo newItemValue is $newItemValue
+		if ($itemValue != $newItemValue && (`echo $fieldType | egrep '(varchar|string)' | wc -l` == 0)) then
+		    set itemValue = \"$newItemValue\"
+		endif
+		if ($newSet == ) then
+		    set newSet = $itemValue
+		    set spec = $addQuote\%s$addQuote
+		else
+		    set newSet = $newSet,$itemValue
+		    set spec = $spec,$addQuote\%s$addQuote
+		endif # -4
+	    else if ($itemValue == ) then
+		if ($newSet == ) then
+		    set newSet = \$$labelCounter
+		    set spec = \%s
+		else
+		    set newSet = $newSet,\$$labelCounter
+		    set spec = $spec,\%s
+		endif # -4
+	    endif # -30
+	end
+#	echo spec is $spec
+#	echo newSet is $newSet
+	set spec = `echo $spec | sed -e 's/quote%squote/\\\"%s\\\"/g'`
+	set spec = \"$spec\\n\"
+#	echo newSet is $newSet
+#	echo spec is $spec
+#	echo updates is $updates spec is $spec newSet is $newSet where is $where
+#	echo negateWhere is $negateWhere
+	echo "{if ($where) printf($spec,$newSet)}{if ($negateWhere) print "\$0"}" > ./.progfile.$$
+	cat $table | awk -F"," -f ./.progfile.$$ > $table.tmp
+	if ($status == 0) then
+	    rm ./.progfile.$$
+	    echo \(`diff $table $table.tmp|grep \>\ |wc -l` rows affected\)
+	    mv $table.tmp $table
+	endif
+    endif
+else
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+exit 0
