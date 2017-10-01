@@ -1,0 +1,62 @@
+#!/bin/tcsh
+# export the specified data file.
+if ($# < 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (! -f $MACSQL_HOME/db/tables/$1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+set table = $1
+if (! -d ~/Desktop/MakeMoney) then
+   mkdir ~/Desktop/MakeMoney
+endif
+if (! -d ~/Desktop/MakeMoney/exports) then
+   mkdir ~/Desktop/MakeMoney/exports
+endif
+if (! -d ~/Desktop/MakeMoney/exports/xml) then
+   mkdir ~/Desktop/MakeMoney/exports/xml
+endif
+
+set xml = "$table.`date +%Y%m%d.%H%M%S`.xml"
+set fieldCount = `cat $MACSQL_HOME/db/tables/$table |awk -F"," '{print NF}'`
+
+echo \<\?xml\ version=\"1.0\"\?\> > $xml
+echo \<\!DOCTYPE\ $table\ \[ >> $xml
+set labels = `head -1 $MACSQL_HOME/db/tables/$table|awk '{print substr($0,2)}'`
+set row = 
+set count = 0
+while ($count < $fieldCount)
+    @ count++
+    set label = `echo $labels,$count|awk -F"," '{print $($NF)}'|awk '{print $1}'`
+    echo \<\!ELEMENT $label \(\#PCDATA\)\ \> >> $xml
+    if ($row == ) then
+	set row = "$label"
+    else
+	set row = "$row,$label"
+    endif
+end
+echo \<\!ELEMENT row \($row\) \> >> $xml
+echo \<\!ELEMENT rows \(row\*\) \> >> $xml
+echo \]\> >> $xml
+echo \<$table\> >> $xml
+echo \<rows\> >> $xml
+set rowNum = 0
+foreach row (`cat $MACSQL_HOME/db/data/$table`)
+    @ rowNum++
+    set count = 0
+    set values = `head -$rowNum $MACSQL_HOME/db/data/$table|tail -1`
+    echo \<row\> >> $xml
+    while ($count < $fieldCount)
+	@ count++
+	set label = `echo $labels,$count|awk -F"," '{print $($NF)}'|awk '{print $1}'`
+	set value = `echo $values,$count|awk -F"," '{print $($NF)}'`
+	echo \<$label\>$value\<\/$label\> | sed -e 's/%20/ /g'|sed -e 's/&/&amp;/' >> $xml
+    end
+    echo \<\/row\> >> $xml
+end
+echo \<\/rows\> >> $xml
+echo \<\/$table\> >> $xml
+mv $xml ~/Desktop/MakeMoney/exports/xml/$xml
+exit 0
