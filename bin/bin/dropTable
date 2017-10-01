@@ -1,0 +1,41 @@
+#!/bin/tcsh
+# This script drops a table.
+# If the table exists, it is saved to MACSQL_HOME/old/
+# The old table is saved as tablename.`date +%Y%m%d_%H%M%S`
+set parameters = `echo $*`
+set table = $parameters[2]
+if ($table == ) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+else if ($parameters[1] != table) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (! -f $MACSQL_HOME/db/tables/$table) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+else
+# create old directory structure if the table already exists.
+    cd $MACSQL_HOME/db
+    if (-f $MACSQL_HOME/db/tables/$parameters[2]) then
+	if (! -d $MACSQL_HOME/old) then
+	    mkdir $MACSQL_HOME/old
+	endif
+	foreach dir (`find . -type d`)
+	    if (! -d $MACSQL_HOME/old/$dir) then
+		mkdir $MACSQL_HOME/old/$dir
+	    endif
+	end
+    endif
+# preserve the old table definition if it exists.
+    set exten = `date +%Y%m%d_%H%M%S`
+    foreach dir (`find . -type d`)
+	chmod 755 $MACSQL_HOME/old/$dir
+	if (-f $dir/$table) then
+	    chmod 755 $MACSQL_HOME/old/$dir
+	    mv $dir/$table $MACSQL_HOME/old/$dir/$table.$exten
+	    chmod 444 $MACSQL_HOME/old/$dir/$table.$exten
+	    chmod 555 $MACSQL_HOME/old/$dir
+	endif
+    end
+endif
