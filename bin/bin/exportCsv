@@ -1,0 +1,48 @@
+#!/bin/tcsh
+# export the specified data file.
+if ($# < 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (! -f $MACSQL_HOME/db/tables/$1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+set table = $1
+if (! -d ~/Desktop/MakeMoney) then
+   mkdir ~/Desktop/MakeMoney
+endif
+if (! -d ~/Desktop/MakeMoney/exports) then
+   mkdir ~/Desktop/MakeMoney/exports
+endif
+if (! -d ~/Desktop/MakeMoney/exports/csv) then
+   mkdir ~/Desktop/MakeMoney/exports/csv
+endif
+set csv = "~/Desktop/MakeMoney/exports/csv/$table.`date +%Y%m%d.%H%M%S`.csv"
+set fieldCount = `cat $MACSQL_HOME/db/tables/$table |awk -F"," '{print NF}'`
+set count = 0
+set fields = `cat $MACSQL_HOME/db/tables/$table`
+while ($count < $fieldCount)
+    @ count++
+    set field = `echo $fields,$count | awk -F"," '{print $($NF)}'|awk '{print $1}' | sed -e 's/(//' | sed -e 's/)//'`
+    if ($count < $fieldCount) then
+	echo -n $field, >> $csv
+    else
+	echo $field >> $csv
+    endif
+end
+cat $MACSQL_HOME/db/data/$table|sed -e 's/%20/ /g'  >> $csv
+set count = 0
+set nf = `cat $MACSQL_HOME/db/tables/$table | awk -F"," '{print NF}'`
+while ($count < $fieldCount)
+    @ count++
+    set field = `echo $fields,$count | awk -F"," '{print $($NF)}'`
+    set field = `echo $field | awk '{print $2}' | sed -e 's/(//' | sed -e 's/)//'|sed -e 's/,//'`
+    set float = `echo $field | grep -w float | wc -l`
+    else if ($count < $nf) then
+	echo -n \"\", >> $csv
+    else if ($count == $nf) then
+	echo \"\" >> $csv
+    endif
+end
+exit 0
