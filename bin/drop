@@ -1,0 +1,9 @@
+#!/bin/tcsh
+if ($argv[1] == table) then
+    $MACSQL_HOME/bin/bin/dropTable $*
+    exit $status
+else
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+exit 0
