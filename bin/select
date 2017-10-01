@@ -1,0 +1,97 @@
+#!/bin/tcsh
+# This script implements the oracle's select function including
+# distinct, sum, count, ...
+
+set noglob
+set parameters = "$*"
+set distinct = 0
+if (`echo $* | egrep '(distinct \(|distinct\()' | wc -l` == 1) then
+    set parameters = `echo "$parameters" | sed -e 's/distinct (//' | sed -e 's/distinct(//' | sed -e 's/)//'`
+    set distinct = 1
+else if (`echo $* | grep distinct\  | wc -l` == 1) then
+    set parameters = `echo "$parameters" | sed -e 's/distinct//'`
+    set distinct = 1
+endif
+if (`echo $* | grep -w from | wc -l` == 0) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+set selcount = 0
+if (`echo $* | egrep '(count \(|count\()'|wc -l` == 1) then
+    set parameters = `echo $parameters | sed -e 's/count (//' | sed -e 's/count(//' | sed -e 's/)//'`
+    set selcount = 1
+    if ($distinct == 1) then
+	$MACSQL_HOME/bin/bin/selectFromTable $parameters %distinct% | wc -l
+	exit $status
+    else if (`echo $parameters | grep where | wc -l` == 0) then
+	wc -l $MACSQL_HOME/db/data/$parameters[3]
+	exit $status
+    else if (`echo $parameters | egrep -w '(and|or)' | wc -l` == 0) then
+	if (`echo $parameters | grep \!= | wc -l` == 1) then
+	    set bangEquals = 1
+	    set parameters = `echo $parameters | sed -e 's/!=/ \\\!= /'`
+	else
+	    set bangEquals = 0
+	    set parameters = `echo $parameters | sed -e 's/=/ = /'`
+	endif
+	# set parameters = `echo $parameters | sed -e 's/=/ = /' | sed -e 's/\\\! =/\\\!=/'| sed -e 's/\\\!/ \\\!/'`
+	set selectField = $parameters[5]
+	set selectValue = $parameters[7]
+	set tabdef = `cat $MACSQL_HOME/db/tables/$parameters[3] | sed -e 's/,/, /g' | sed -e 's/,  /, /g'`
+	set counter = 0
+	set fieldCount = `echo $tabdef | awk -F"," '{print NF}'`
+	while ($counter < $fieldCount)
+	    @ counter++
+	    set curField = `echo $tabdef,$counter | awk -F"," '{print $($NF)}'|awk '{print $1}'`
+	    if ("$curField" == "$selectField") then
+		set selectField = $counter
+		set counter = $fieldCount
+	    endif
+	end
+	if ($bangEquals == 0) then
+	    set isNegP = `echo $selectValue | awk '{printf("%d",$1)}'`
+	    if ($isNegP < 0) then
+		cat $MACSQL_HOME/db/data/$parameters[3] | awk -F"," "{print $ $selectField}" | grep -w \\$selectValue|wc -l
+	    else   
+		set parameters = `echo $parameters|sed -e 's/*/%count%/'`
+		$MACSQL_HOME/bin/bin/selectFromTable %count% $parameters
+	    endif
+	else
+	    set isNegP = `echo $selectValue | awk '{printf("%d",$1)}'`
+	    if ($isNegP < 0) then
+		cat $MACSQL_HOME/db/data/$parameters[3] | awk -F"," "{print $ $selectField}" | grep -v -w \\$selectValue | wc -l
+	    else   
+		cat $MACSQL_HOME/db/data/$parameters[3] | awk -F"," "{print $ $selectField}" | grep -v -w $selectValue | wc -l
+	    endif
+	endif
+	exit $status
+    endif
+else if ($selcount == 1) then
+    $MACSQL_HOME/bin/bin/selectFromTable $parameters | wc -l
+    exit $status
+endif
+if ($distinct == 1) then
+#    $MACSQL_HOME/bin/bin/selectFromTable $parameters %distinct% | sort -n | uniq
+    $MACSQL_HOME/bin/bin/selectFromTable $parameters %distinct%
+    exit $status
+else
+    if ($selcount == 1) then
+	set pCnt = `echo $parameters | awk '{print NF}'`
+	set counter = 1
+	set pNew = 
+	while ($counter < $pCnt)
+	    @ counter++
+	    set pNew = "$pNew $parameters[$counter]"
+	end
+	set parameters = "$pNew"
+	set parameters = `echo $parameters | sed -e 's/*/%count%/'`
+#	echo parameters is $parameters
+	$MACSQL_HOME/bin/bin/selectFromTable %count% $parameters #| wc -l
+	exit $status
+    else
+#	echo parameters is $parameters
+	$MACSQL_HOME/bin/bin/selectFromTable $parameters
+	exit $status
+    endif
+endif
+exit 0
