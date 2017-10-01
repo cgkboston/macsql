@@ -1,0 +1,41 @@
+#!/bin/tcsh
+# This script implements the oracle's delete function
+set noglob
+set fromVal = `echo $argv[1] | grep -w from |wc -l`
+if ($fromVal == 0) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+else if ($#argv > 2) then
+    if ($argv[3] != where) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    endif
+endif
+set append = 
+set nf = `echo $* | awk '{print NF}'`
+set c = $nf
+echo $* | grep -w or >& /dev/null
+if ($status == 0) then
+    set p1 = 
+    set p2 = `echo $* | awk '{print $1,$2,$3}'`
+    set paramCounter = 4
+    while ($paramCounter <= $nf)
+	set append = `echo $* $paramCounter | awk '{print $($NF)}'`
+	if ($append == or) then
+	    $MACSQL_HOME/bin/bin/deleteFromTable $p2 $p1
+	    if ($status != 0) then
+		$MACSQL_HOME/bin/help `basename $0`
+		exit $status
+	    endif
+	    set p1 = 
+	else
+	    set p1 = "$p1 $append"
+	endif
+	@ paramCounter++
+    end
+    $MACSQL_HOME/bin/bin/deleteFromTable $p2 $p1
+else
+    $MACSQL_HOME/bin/bin/deleteFromTable $*
+    exit $status
+endif
+exit 0
