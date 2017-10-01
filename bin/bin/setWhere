@@ -1,0 +1,115 @@
+#!/bin/tcsh
+set noglob
+set parameters = `echo $* | sed -e 's/(/ \( /g'|sed -e 's/)/ \) /g'|sed -e 's/,/ , /g'`
+set parameters = `echo $parameters | sed -e 's/=/ = /g'`
+set table = $MACSQL_HOME/db/tables/$parameters[1]
+set parameters = `echo $parameters | awk -F\ where\  '{print $2}'`
+if ("$parameters" == "") then
+    echo \(1\)
+    exit 0
+endif
+set inQuotes = 0
+set newParms = 
+foreach value ($parameters)
+    if ($inQuotes == 1) then
+	set newParms = `echo $newParms\%20$value`
+	echo $value | grep \" >& /dev/null	
+	if ($status == 0) then
+	    set inQuotes = 0
+	endif
+    else
+	set newParms = `echo $newParms $value`
+	echo $value | grep \" >& /dev/null
+	if ($status == 0) then 
+	    set countQuotes = `echo $value | awk -F\" '{print NF}'`
+	    if ($countQuotes < 3) then
+		set inQuotes = 1 
+	    endif
+	endif
+    endif
+end
+set parameters = "$newParms"
+#echo parameters is $parameters
+set sysdate = `$MACSQL_HOME/bin/bin/getDate`
+set labels = `cat $table|sed -e s/\(//g|sed -e s/\)//g|sed -e s/,/,\ /g|sed -e s/,//g`
+set numLabels = `echo $labels | awk '{print NF}'`
+set likeVal = 0
+set where = 
+set notInVal = 0
+set bangEquals = 0
+#echo where is $where
+#echo labels is $labels 
+#echo parameters is $parameters
+set parameters = `echo $parameters | sed -e 's/\! =/\!=/g'`
+set parameters = `echo $parameters | sed -e 's/\!=/ \!= /g'`
+set currentFieldSet = 0
+foreach value ($parameters)
+#    echo start value is $value where is $where
+    if ("$value" == "like") then
+	set likeVal = 1
+	continue
+    else if ("$value" == "not") then
+	set notInVal = 1
+	continue
+    else if ("$value" == "in") then
+	continue
+    else if ("$value" == "(") then
+	if ($notInVal == 1) then
+	    set where = `echo $where\(\!`
+	endif
+	set where = `echo $where\(`
+    else if ("$value" == ")") then
+	set where = `echo $where\)`
+	if ($notInVal == 1) then
+	    set where = `echo $where\)`
+	    set notInVal = 0
+	endif
+    else if ("$value" == ",") then
+	set where = `echo $where\|\|`
+    else if ("$value" == "and") then
+	set where = `echo $where\&\&`
+    else if ("$value" == "or") then
+	set where = `echo $where\|\|`
+    else if ("$value" == "=") then
+	set where = `echo $where`
+    else if ("$value" == "!=") then
+	set bangEquals = 1
+    else if (`echo $labels | grep -w $value | wc -l` > 0) then
+	set counter = 0
+	while ($counter < $numLabels)
+	    @ counter++
+	    if ($labels[$counter] == $value) then
+		set currentField = `echo $counter 1 + 2 \/ p | dc`
+		set currentFieldSet = 1
+		set counter = $numLabels
+	    endif
+	end
+    else
+	#echo value is $value
+	set curLen = `echo $value | awk '{print length}'`
+	#echo curLen is $curLen
+	#echo currentFieldSet is $currentFieldSet
+# IMPORTANT: THIS NEEDS WORK !!!, OBVIOUSLY !!!
+	if ($currentFieldSet == 0) then
+#	    continue
+#	    echo IN SET WHERE HELLO
+	    help $0 $table
+	    exit $status
+	endif
+	if ($bangEquals == 1) then
+	    set where = `echo $where\(\$$currentField\!\~\/$value\/\|\|length\(\$$currentField\)\!=$curLen\)`
+	    set bangEquals = 0
+	else if ($likeVal == 1) then
+	    set where = `echo $where\(\$$currentField\~\/$value\/\)`
+	    set likeVal = 0
+	else
+	    set where = `echo $where\(\$$currentField\~\/$value\/\&\&length\(\$$currentField\)==$curLen\)`
+	endif
+    endif
+#    echo end value is $value where is $where
+end
+if ("$where" == "") then
+    set where = 1
+endif
+echo $where
+exit 0
