@@ -1,0 +1,62 @@
+#!/bin/tcsh
+set curdir = `pwd`
+cd $MACSQL_HOME/bin
+if ($1 == ) then
+    echo commands\:
+    wc -l * |& egrep -v '(total|bin|tcsh)'
+    echo press enter for a description of each command
+    set x = $<
+    echo alltabs' '- listing of all tables
+    echo backup'  '- creates a database backup on a regular basis
+    echo create'  '- creates a database table or index
+    echo delete'  '- deletes one or more records from a table
+    echo descr'   '- describes an individual database table
+    echo drop'    '- drops a table
+    echo export'  '- exports a table to a numbers\/excel csv file, xml or html
+    echo help'    '- print the commands and this screen
+    echo history' '- tcsh like history with a twist of oracle try it
+    echo insert'  '- inserts a row into a table
+    echo macsql'  '- this is the database command line interface
+    echo quit'    '- quit macsql and return to the unix shell
+    echo select'  '- selects one or more rows from a table
+    echo truncate''- truncate all contents from a table
+    echo update'  '- updates one or more rows from a table
+    cd $curdir
+    exit 0
+else
+    if ($2 != ) then
+	set table = `basename $2`
+	$MACSQL_HOME/bin/descr $table
+    endif
+    set script = `basename $1`
+    echo -n Syntax:' '
+    if ($script == select || $script == selectFromTable) then
+	echo select \{count\|\|sum\} columnName\(s,...\)\|\|\* from \{tableName\} \&optional where columnName \{\=,in,\!=,not in\}  value\(s\) ... \{and\|\|or\}
+    else if ($script == setWhere) then
+	echo setWhere \{tableName\} where field \{\=,in,\!=,not in\} value\(s\) ... \{and\|\|or\}
+	echo column name specified is not defined for the table $2
+    else if ($script == delete || $script == deleteFromTable) then
+	echo delete from tableName \&optional where columnName = value ...
+    else if ($script == update) then
+	echo update \{tableName\} set ... = ... \&optional where ... = ... \(and\|\|or\) ... = ... ...
+    else if ($script == create || $script == createTable || $script == createIndex) then
+	echo create table \{tableName\} \(columnName \(float\|integer\|varchar2\|datetime\|binary\)\)
+	echo Syntax: create \{\&optional unique\} index \{indexName\} on \{tableName\} # \(columnName\)
+    else if ($script == backup || $script == backupDB) then
+	echo backup \&\&options \{gold\}
+    else if ($script == drop || $script == dropTable) then
+	echo drop table \{tableName\}
+    else if ($script == insert || $script == insertIntoTable) then
+	echo insert into \{tableName\} values \(...\)
+    else if ($script == truncate || $script == truncateTable) then
+	echo truncate table \{tableName\}
+    else if ($script == export || $script == exportTable || $script == exportToXml || $script == exportToHtml) then
+	echo export \{tableName\} \(csv\|\|xml\|\|html\)
+    else if ($script == descr) then
+	echo $script \{tableName\}
+    else if ($script == buildIndex) then
+	echo $script \{tableName\} \{indexName\}
+    endif
+    cd $curdir
+    exit 1
+endif
