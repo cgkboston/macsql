@@ -1,0 +1,13 @@
+#!/bin/tcsh
+cd $MACSQL_HOME/db/tables
+if ($#argv != 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (-f $1) then
+    cat `basename $1`
+else
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+exit 0
