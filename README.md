@@ -25,41 +25,44 @@ The following shows all of the executable files and directories for the macsql d
 chriss-iMac:~ chriskennedy$ pwd
 /Users/chriskennedy
 chriss-iMac:~ chriskennedy$ cd make.money/macsql/bin/
-chriss-iMac:bin chriskennedy$ wc -l *
-       4 2grep
+chriss-iMac:bin chriskennedy$ pwd
+/Users/chriskennedy/make.money/macsql/bin
+chriss-iMac:bin chriskennedy$ wc -l * | sort -n 
+       0 quit
        4 alltabs
+       8 truncate
+       9 drop
       12 backup
+      13 descr
+      25 export
+      27 insert
       32 create
       41 delete
-      13 descr
-       9 drop
-      25 export
       62 help
-     103 history
-      27 insert
-     163 macsql
-       0 quit
       97 select
-       8 truncate
+     103 history
      156 update
-     756 total
-chriss-iMac:bin chriskennedy$ wc -l bin/*
-     110 bin/backupDB
-     120 bin/createTable
-      93 bin/deleteFromTable
-      41 bin/dropTable
-      48 bin/exportCsv
-     209 bin/exportHtml
-      62 bin/exportXml
-      10 bin/fseek.py
-      29 bin/getDate
-      72 bin/insertIntoTable
-     346 bin/selectFromTable
-     115 bin/setWhere
-      34 bin/tableHeader.html
-      90 bin/transactions
-      41 bin/truncateTable
+     163 macsql
+     752 total
+chriss-iMac:bin chriskennedy$ cd bin/
+chriss-iMac:bin chriskennedy$ wc -l *|sort -n 
+      10 fseek.py
+      29 getDate
+      34 tableHeader.html
+      41 dropTable
+      41 truncateTable
+      48 exportCsv
+      62 exportXml
+      72 insertIntoTable
+      90 transactions
+      93 deleteFromTable
+     110 backupDB
+     115 setWhere
+     120 createTable
+     209 exportHtml
+     346 selectFromTable
     1420 total
+chriss-iMac:bin chriskennedy$ 
 __________________________________________
 In addition to the bin and bin/bin folders above, there is folder for the data
 $MACSQL_HOME/db with subfolders as shown below.  Simply create the folders on your server.
