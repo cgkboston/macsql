@@ -1,0 +1,346 @@
+#!/bin/tcsh
+# Select data from a table... seems straight forward enough
+################
+# The steps are:
+# 1. Initialize
+# 2. Set the table name
+# 3. Set the column numbers to select
+# 4. Set the where clause
+# 5. Print the result
+################
+###############
+# 1. Initialize
+###############
+set noglob
+set parameters = `echo $* | sed -e 's/ ,/,/' | sed -e 's/,/, /g' | sed -e 's/\;//'`
+if (`echo "$parameters" | grep from|wc -l` != 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+#############################
+# 2. Start set the table name
+#############################
+set ascdesc =
+set colType =
+set setTable = 0
+set count = 0
+set numFields = `echo $* | awk '{print NF}'`
+while ($count < $numFields)
+    @ count++
+    if ("$parameters[$count]" == "from") then
+	set setTable = 1
+    else if ($setTable == 1) then
+	set setTable = 0
+	set table = $MACSQL_HOME/db/data/$parameters[$count]
+	set tabdef = $MACSQL_HOME/db/tables/$parameters[$count]
+    endif
+end
+set fields = `cat $tabdef | sed -e 's/,/, /g'`
+if (! -s $table) then
+    set flag = 0
+    foreach field ($fields)
+	if ($flag == 0) then
+	    set field = `echo $field|sed -e 's/(//' | sed -e 's/)//'`
+	    echo -n $field' '
+	    set flag = 1
+	else
+	    set flag = 0
+	endif
+    end
+    if ($table == $MACSQL_HOME/db/data/dual && $parameters[1] == sysdate) then
+	$MACSQL_HOME/bin/bin/getDate | awk -F"." '{print $4,$5,$6,$2,$3,$7}'
+    else
+	echo ''
+    endif
+    exit 0
+endif
+#echo table name is $table
+#set x = $<
+########################
+# End set the table name
+########################
+
+###########################################
+# 3. Start set the column numbers to select
+###########################################
+set def = `tail -1 $tabdef`
+set numCols = `echo $def|awk -F"," '{print NF}'`
+set columns = 
+set value = 
+set sumIt = 0
+set minIt = 0
+set maxIt = 0
+set datetimeField = 0
+set foundDistinct = 0
+set selectAllColumns = 0
+if ($parameters[1] == *) then
+    set columnCounter = 0
+    while ($columnCounter < $numCols)
+	@ columnCounter++
+	if ("$columns" == "") then
+	    set columns = \$$columnCounter
+	else
+	    set columns = $columns,\$$columnCounter
+	endif
+    end
+    set selectAllColumns = 1
+    set parameters = `echo $parameters | sed -e s/*/$columns/`
+else
+    set count = 1
+    set foundDistinct = `echo $parameters | sed -e s/\(/\ /g | grep -w %distinct%|wc -l`
+    if ($foundDistinct == 1) then
+	set parameters = `echo $parameters | sed -e 's/%distinct%//'`
+    endif
+    
+    while ("$parameters[$count]" != "from")
+	set value = `echo $parameters[$count] | sed -e 's/,//'`
+	set foundSum = `echo $value | sed -e s/\(/\ /g | grep -w sum|wc -l`
+	set foundMin = `echo $value | sed -e s/\(/\ /g | grep -w min|wc -l`
+	set foundMax = `echo $value | sed -e s/\(/\ /g | grep -w max|wc -l`
+	if ($foundSum == 1) then
+	    set len = `echo $value | awk '{print length}'`
+	    set sumValue = `echo $value $len | awk '{print substr($1,5,($2-1))}'`
+	    set sumValue = `echo $sumValue|sed -e 's/)//'`
+	    set value = $sumValue
+	    set sumIt = 1
+	endif
+	if ($foundMin == 1) then
+	    set len = `echo $value | awk '{print length}'`
+	    set minValue = `echo $value $len | awk '{print substr($1,5,($2-1))}'`
+	    set minValue = `echo $minValue|sed -e 's/)//'`
+	    set value = $minValue
+	    set minIt = 1
+	endif
+	if ($foundMax == 1) then
+	    set len = `echo $value | awk '{print length}'`
+	    set maxValue = `echo $value $len | awk '{print substr($1,5,($2-1))}'`
+	    set maxValue = `echo $maxValue|sed -e 's/)//'`
+	    set value = $maxValue
+	    set maxIt = 1
+	endif
+	set defCnt = 0
+	set found = 0
+	while ($defCnt < $numCols)
+	    @ defCnt++
+	    set tVal = `echo $def,$defCnt|awk -F"," '{print $($NF)}'`
+	    set tVal = `echo $tVal | awk '{print $1}'|sed -e s/\(//`
+	    if ("$tVal" == "$value") then
+		set found = 1
+		if ($columns == ) then
+		    set columns = \$$defCnt
+		else
+		    set columns = $columns,\$$defCnt
+		endif
+		set tVal = `echo $def,$defCnt|awk -F"," '{print $($NF)}' | awk '{print $NF}'`
+		set tVal = `echo $tVal | sed -e 's/(/ /' | awk '{print $1}'`
+		if ($tVal == datetime) then
+		    set datetimeField = 1
+		endif
+	    endif
+	end
+	if ($found == 0 && $value != %count%) then
+	    echo \($value\) not found
+	    $MACSQL_HOME/bin/help `basename $0`
+	    exit $status
+	endif
+	@ count++
+    end
+endif
+
+#echo columns to select are\: $columns
+#set x = $<
+######################################
+# end set the column numbers to select
+######################################
+
+###############################
+# 4. Start set the where clause
+###############################
+set whereParms = `echo $parameters | awk -F"order by" '{print $1}' | awk -F"from" '{print $2}'`
+#echo SELECTFROMTABLE1
+#echo whereParms is $whereParms
+#tcsh -v $MACSQL_HOME/bin/bin/setWhere $whereParms
+#echo SELECTFROMTABLE2
+#exit 1
+#$MACSQL_HOME/bin/bin/setWhere $whereParms
+set where = `$MACSQL_HOME/bin/bin/setWhere $whereParms`
+#echo whereParms is $whereParms
+#echo ===========
+#echo where = $where
+#echo ===========
+if ($status != 0) then
+######    echo _++_____++++++
+######    echo where is $where 
+#    echo where is $where
+ #   echo status is not zero calling select again
+ #   $MACSQL_HOME/bin/help select `basename $table`
+    exit $status
+endif
+#echo bye
+#echo where is $where
+##########################
+# End set the where clause
+##########################
+
+###########################
+# 5. Start Print the result
+###########################
+if (`echo $parameters | grep %count% | wc -l` == 1) then
+    set columns = count
+endif
+#echo if \($where\)
+#echo print $columns
+if (`echo $parameters | grep "order by"|wc -l` == 1) then
+#######    echo IN WC
+#######    echo $parameters | awk -F"order by" '{print $2}' | sed -e 's/,/ /g'
+    set sortCol = `echo $parameters | awk -F"order by" '{print $2}' | sed -e 's/,/ /g' | awk '{print $1}'`
+    set ascdesc = `echo $parameters | awk -F"order by" '{print $2}' | sed -e 's/,/ /g' | awk '{print $NF}'`
+#######echo ___________
+#######echo parameters is $parameters
+#######echo sortCol is $sortCol
+#######echo ascdesc = $sortCol
+#######echo ###########
+    if ($ascdesc == desc || $ascdesc == descending) then
+	set ascdesc = -r
+    else
+	set ascdesc = 
+    endif
+    set fields = `echo $fields|sed -e 's/(//g' | sed -e 's/)//g'`
+#   set the sort parameter to either -n or null based on date type.
+    set isInt = 0
+    set colCounter = 0
+    set dashn = 
+    set cols = `cat $tabdef | awk -F"," '{print NF}'`
+    set counter = 0
+    while ($counter < $cols)
+	@ counter++
+	set double = `echo $counter 2 \* 1 \- p | dc`
+	set col = $fields[$double]
+	if ($col == $sortCol) then
+	    set sortCol = $counter
+	    set counter = $cols
+	    @ double++
+	    set colType = `echo $fields[$double]|sed -e 's/,//'`
+	endif
+	if (($colType == integer) || ($colType == float)) then
+	    set dashn = \-n
+	endif
+    end
+    set catSort = "sort -t',' $dashn -k $sortCol $ascdesc"
+else
+    set catSort = cat
+endif
+if ($sumIt == 1 && $foundDistinct == 1) then
+    goto sumDistinctRows
+else if ($sumIt == 1) then
+    goto sumRows
+else
+    if ($maxIt == 1) then
+	if ($datetimeField == 1) then
+	    cat ../db/data/$table | awk -F"," "{if ($where) print $columns}"|sed -e 's/%20/ /g' | sort -n -r | head -1 | awk -F"." '{print $4,$5,$6,$7,$2,$3}'
+	else
+	    cat $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/%20/ /g' | sort -n -r | head -1
+	endif
+    else if ($minIt == 1) then
+	if ($datetimeField == 1) then
+	    cat $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/%20/ /g' | sort -n | head -1 | awk -F"." '{print $4,$5,$6,$7,$2,$3}'
+	else
+	    cat $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/%20/ /g' | sort -n | head -1
+	endif
+    else if ($columns == count) then
+	cat $table | awk -F"," "BEGIN {count=0}{if ($where) count++} END {print $columns}"
+    else if ($foundDistinct == 1) then
+	if ($datetimeField == 1) then
+	    cat $table | awk -F"," "{if ($where) print $columns}" | sort -n | uniq | awk -F"." '{print $4,$5,$6,$2,$3,$7}'
+	else
+#########	    echo SEEYA1
+	    cat $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/%20/ /g' | sort -n | uniq
+	endif
+    else
+	set count = 0
+	set y = 0
+	set lstr = 
+#	echo table is $table
+#	echo catSort is $catSort
+	cd $MACSQL_HOME/db/tables
+	set table = `basename $table`
+	#echo HELLO 0
+# THIS PRINTS A HEADER FOR SELECT ALL
+	if ($selectAllColumns == 1) then
+	    set c1 = `cat $table | sed -e 's/,/ /g' | wc | awk '{printf("%d 2 / p",$2)}' | dc` 
+	    echo $c1, `cat $table` | awk -F"," '{while (x<=$1) print x=x+1,$x}' | awk '{if (NF>2) print $(NF-1)}' | sed -e 's/(//' | awk '{printf("%s\t",$0)}' 
+	    echo ''
+	endif
+	#echo HELLO 1
+	cd $MACSQL_HOME/bin
+	set table = $MACSQL_HOME/db/data/$table
+##	echo catSort is $catSort ascdesc is $ascdesc table is $table
+	#echo HELLO1
+	if ($where == \&\&) then
+	    set where = 2
+	endif
+##	echo CATSORT IS $catSort \{$ascdesc\} \{$table\} WHERE IS $where COLUMNS IS WHAT WE WILL SELECT\: $columns
+##	echo WHEREPARMS IS $whereParms
+##	echo SEEYA2
+##	echo $catSort $ascdesc $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/ /,/g'
+##	echo =========
+##	echo total is: $catSort $ascdesc $table
+##	echo awk section is awk -F"," "{if ($where) print $columns}"
+##	echo sed section is sed -e 's/ /,/g'
+######    echo where is $where
+######    echo $catSort $ascdesc $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/ /,/g'
+####	echo HELLO2
+##	echo COLUMNS IS $columns
+#######	echo catSort is $catSort
+##########	echo the line is $catSort $ascdesc $table
+##########	echo where is $where
+##########	echo now the line is $catSort $ascdesc $table| awk -F"," "{if ($where) print $columns}"|sed -e 's/ /,/g'
+#x	echo catSort is $catSort
+#x	echo 1
+#x	echo eval $catSort $ascdesc $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/ /,/g'
+#x	echo 2
+	foreach line (`eval $catSort $ascdesc $table | awk -F"," "{if ($where) print $columns}"|sed -e 's/ /,/g'`)
+	    echo -n $line | awk -F"," 'BEGIN {x=0}\
+	    {while(++x<=NF)\
+		{if (length($x)==37&&\
+		    # If the value contains a time zone (US or GMT)\
+		    (substr($x,18,5)~/.EST./||/.EDT./||/.PDT./||/.PST./||/.MDT./||/.MST./||/.CDT./||/.CST./||/.GMT./)&&\
+		    # and the value contains a day of the week\
+		    (substr($x,23,3)~/Sun/||/Mon/||/Tue/||/Wed/||/Thu/||/Fri/||/Sat/)&&\
+		    # and the value contains a month\
+		    (substr($x,27,3)~/Jan/||/Feb/||/Mar/||/Apr/||/May/||/Jun/||/Jul/||/Aug/||/Sep/||/Oct/||/Nov/||/Dec/)&&\
+		    # and the value contains a YYYYMMDD at the begining\
+		    # and a YYYY at the end\
+		    int $x && int substr($x,34,4))\
+		    # Then print the value as a time stamp similar to unix\
+		    # but move the year after the day\
+		    # NEED TO GIVE THE LINE ABOVE SOME THOUGHT\
+		{printf("%s %s %2d %s %s %s\t",substr($x,23,3),\
+		    substr($x,27,3),substr($x,31,2),\
+		    substr($x,10,8),substr($x,19,3),\
+		    substr($x,34,4))}\
+	# Else print the value as it appears in the data file\
+		else printf("%s\t",$x)}}' | sed -e 's/%20/ /g'
+	end
+    endif
+endif
+exit 0
+######################
+# End Print the result
+######################
+
+##############################
+# functions for sum and errors
+##############################
+sumRows:
+	set pos = `cat $table | awk -F"," "{if ($where) print $columns}" | grep -v '\-' | awk 'BEGIN {print 0}{printf("%.2f+\n",$0)} END {printf("%s\n","p")}' | dc`
+	set neg = `cat $table | awk -F"," "{if ($where) print $columns}" | grep '\-' | awk 'BEGIN {print 0}{printf("%.2f+\n",$0)} END {printf("%s\n","p")}'|sed -e 's/\-//' | dc`
+	set tot = `echo $pos $neg - p | dc`
+	echo $tot
+	exit 0
+sumDistinctRows:
+	set pos = `cat $table | awk -F"," "{if ($where) print $columns}" | grep -v '\-' | awk 'BEGIN {print 0}{printf("%.2f+\n",$0)} END {printf("%s\n","p")}' | sort | uniq | dc`
+	set neg = `cat $table | awk -F"," "{if ($where) print $columns}" | grep '\-' | awk 'BEGIN {print 0}{printf("%.2f+\n",$0)} END {printf("%s\n","p")}' | sed -e 's/\-//' | sort | uniq | dc`
+	set tot = `echo $pos $neg - p | dc`
+	echo $tot
+	exit 0
