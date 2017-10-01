@@ -1,0 +1,31 @@
+#!/bin/tcsh
+if ($# < 3) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if ($argv[1] != table && $argv[1] != index) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if ($argv[1] == table) then
+    set ch = `echo $argv[3] | awk '{print substr($1,1,1)}'`
+    if ("$ch" != "(") then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else if ($#argv < 4) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else
+	$MACSQL_HOME/bin/bin/createTable $*
+	exit $status
+    endif
+endif
+if ($argv[1] == index && $argv[2] != unique) then
+    if ($#argv != 4 || $argv[3] != on) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else
+	$MACSQL_HOME/bin/bin/createIndex $argv[4] $argv[2]
+	exit $status
+    endif
+endif
