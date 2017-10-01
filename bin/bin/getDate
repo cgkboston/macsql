@@ -1,0 +1,29 @@
+#!/bin/tcsh
+# Get the current sysdate once, this is important for midnight
+# processing!!! The date is readable, sortable and accurate,
+# based on unix military time with time zone.
+unset noglob
+if ("$6" != "") then
+    set dt = {$1,$2,$3,$4,$5,$6}
+else if ("$1" != "") then
+    set dt = `echo $1 | sed -e 's/%20/ /g' | awk '{printf("{%s,%s,%02d,%s,%s,%d}",$1,$2,$3,$4,$5,$6)}'`
+else
+    set dt = `date`
+endif
+set months = {Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec}
+set mNum = 1
+set month = $months[1]
+while ($months[$mNum] != $dt[2])
+    @ mNum++
+end
+if ($mNum < 10) then
+    set mNum = 0$mNum
+endif
+set d1 = $dt[6]$mNum
+if ($dt[3] < 10 && `echo $dt[3] | awk '{print length}'` == 1) then
+    set sysdate = $d1'0'$dt[3].$dt[4].$dt[5].$dt[1].$dt[2].0$dt[3].$dt[6]
+else
+    set sysdate = $d1$dt[3].$dt[4].$dt[5].$dt[1].$dt[2].$dt[3].$dt[6]
+endif
+echo $sysdate
+set noglob
