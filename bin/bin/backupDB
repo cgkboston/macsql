@@ -1,0 +1,110 @@
+#!/bin/tcsh
+date
+# create a database backup on a regular basis
+if ($# != 0 && $1 != gold) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (! -d ~/Desktop/MacSql) then
+    mkdir ~/Desktop/MacSql
+endif
+set backupDir = ~/Desktop/MacSql/backups
+if (! -d $backupDir) then
+    mkdir $backupDir
+endif
+set bkp = "`date +%Y%m%d.%H`"
+if (! -d $backupDir/$bkp) then
+    mkdir $backupDir/$bkp
+endif
+
+if (! -d $backupDir/$bkp/db) then
+    mkdir $backupDir/$bkp/db
+endif
+if (! -d $backupDir/$bkp/db/data) then
+    mkdir $backupDir/$bkp/db/data
+endif
+if (! -d $backupDir/$bkp/db/tables) then
+    mkdir $backupDir/$bkp/db/tables
+endif
+if (! -d $backupDir/$bkp/bin) then
+    mkdir $backupDir/$bkp/bin
+endif
+if (! -d $backupDir/$bkp/bin/bin) then
+    mkdir $backupDir/$bkp/bin/bin
+endif
+if (! -d $backupDir/zips) then
+    mkdir $backupDir/zips
+endif
+set backupLog = $backupDir/backup.log.pages
+#echo BACKUP DATABASE TO $backupDir | tee -a $backupLog
+#echo `date`: BACKUP DATABASE SCRIPTS | tee -a $backupLog
+foreach script (`ls $MACSQL_HOME/bin|grep -v bin`)
+    if (-f $backupDir/$bkp/bin/$script) then
+	chmod 755 $backupDir/$bkp/bin/$script
+	cp -fp $MACSQL_HOME/bin/$script $backupDir/$bkp/bin/$script
+	chmod 544 $backupDir/$bkp/bin/$script
+    endif
+end
+foreach script (`ls $MACSQL_HOME/bin/bin|grep -v junk`)
+    if (-f $backupDir/$bkp/bin/bin/$script) then
+	chmod 755 $backupDir/$bkp/bin/bin/$script
+	cp -fp $MACSQL_HOME/bin/bin/$script $backupDir/$bkp/bin/bin/$script
+	chmod 544 $backupDir/$bkp/bin/bin/$script
+    endif
+end
+#echo `date`: BACKUP DATABASE HISTORY | tee -a $backupLog
+foreach file (`ls $MACSQL_HOME/db | egrep -v '(data|tables|index)'`)
+    if (-f $backupDir/$bkp/db/$file) then
+	chmod 666 $backupDir/$bkp/db/$file
+	cp -fp $MACSQL_HOME/db/$file $backupDir/$bkp/db/$file
+	chmod 444 $backupDir/$bkp/db/$file
+    endif
+end
+#echo `date`: BACKUP DATABASE DEFINITION | tee -a $backupLog
+foreach table (`ls $MACSQL_HOME/db/tables`)
+    if (-f $backupDir/$bkp/db/tables/$table) then
+        chmod 666 $backupDir/$bkp/db/tables/$table
+	cp -fp $MACSQL_HOME/db/tables/$table $backupDir/$bkp/db/tables/$table
+	chmod 444 $backupDir/$bkp/db/tables/$table
+    endif
+end
+#echo `date`: BACKUP DATA FILES | tee -a $backupLog
+foreach dataFile (`ls $MACSQL_HOME/db/data`)
+#    echo -n $dataFile'	' | tee -a $backupLog
+    if (-f $backupDir/$bkp/db/data/$dataFile) then
+	chmod 666 $backupDir/$bkp/db/data/$dataFile
+	cp -fp $MACSQL_HOME/db/data/$dataFile $backupDir/$bkp/db/data/$dataFile
+	chmod 444 $backupDir/$bkp/db/data/$dataFile
+    endif
+end
+#echo '' | tee -a $backupLog
+#echo `date`: CREATE tar.gz FILE | tee -a $backupLog
+cd $backupDir/$bkp
+tar cfp - {bin,bin/bin,db,db/data,db/tables} > $bkp.backup.tar
+gzip -9 -f $bkp.backup.tar
+date
+mv $bkp.backup.tar.gz $backupDir/zips/$bkp.backup.tar.gz
+#ls -ltar $backupDir/zips|tail -1 | tee -a $backupLog
+set tod = `date | awk '{printf("%s %2d",$2,$3)}'`
+#ls -ltr $backupDir/$bkp | grep "$tod"
+#ls -ltr $backupDir/$bkp/db | grep "$tod"
+#ls -ltr $backupDir/$bkp/db/data | grep "$tod"
+#ls -ltr $backupDir/$bkp/db/tables | grep "$tod"
+#ls -ltr $backupDir/$bkp/bin | grep "$tod"
+#ls -ltr $backupDir/$bkp/bin/bin | grep "$tod"
+echo `date`: BACKUP COMPLETE ... | tee -a $backupLog
+if ($1 == gold) then
+    pwd
+    cp -Rpf bin/ ../gold.standard.bin/.
+    cp -Rpf db/ ../gold.standard.db/.
+    ls -ltar ../gold.standard.*/*
+    cd ../gold.standard.bin
+    tar cfp - * > ../gold.bin.tar
+    mv ../gold.bin.tar .
+    gzip -9 -f gold.bin.tar
+    cd ../gold.standard.db
+    tar cfp - * > ../gold.db.tar
+    mv ../gold.db.tar .
+    gzip -9 -f gold.db.tar
+endif
+exit 0
