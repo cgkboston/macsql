@@ -1,0 +1,72 @@
+#!/bin/tcsh
+# This script insert a row into a table.
+# The format is insert into tableName values v1,v2,v3
+#
+set parameters = `echo $*|sed -e 's/  / /g' | sed -e 's/, /,/g' | sed -e 's/ ,/,/g' | sed -e 's/ \"/\"/g' | sed -e 's/\" /\"/g' | sed -e 's/ /%20/g'|sed -e 's/%20/ /'|sed -e 's/%20/ /'|sed -e 's/%20/ /'`
+set totalParams = `echo $parameters | awk -F"," '{print NF}'`
+set table = `echo $parameters | sed -e 's/%20/ /g'|awk '{print $2}'`
+set def = `tail -1 $MACSQL_HOME/db/tables/$table`
+set table = $MACSQL_HOME/db/data/$table
+if ($table == ) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+touch $table
+if ($parameters[1] == into) then
+# if data does not match table spec then echo error and exit
+# columnOne integer 0, column2 varchar2(30) null, columnThree float 3.14 
+    set numFieldsDef = `echo $def | awk -F"," '{print NF}'`
+    set numFieldsIns = `echo "$parameters" | awk -F"," '{print NF}'`
+    if ($numFieldsDef != $numFieldsIns) then
+	$MACSQL_HOME/bin/help `basename $0 $2`
+	exit $status
+    endif
+# if parameters are valid then validate the data
+    set dbTypes = {integer,float,varchar2,char,boolean,blob}
+# get the types for each column
+    set c1t = `cat $table | awk '{FS=","}{print $1}' | awk '{print $3}'`
+    
+# if data is valid then insert the data
+# remove the leading and trailing parentheses
+    set parameters = `echo $parameters | awk '{print substr($0,1,length-1)}' | sed -e s/\(//`
+    set index = 4
+    set count = 0
+    set fields = 
+    set numFields = `echo $parameters | awk -F"," '{print NF}'`
+    if (`echo $parameters | grep sysdate |wc -l` > 0) then
+	set sysdate = `$MACSQL_HOME/bin/bin/getDate`
+	set parameters = `echo $parameters | sed -e s/sysdate/$sysdate/g`
+    endif
+# move the code above somewhere else, not sure where yet.
+    while ($count < $numFields)
+	@ count++
+	if ($count == 1) then
+	    set value = `echo $parameters | awk -F"," '{print $1}' | awk -F"values" '{print $NF}'`
+	else
+	    set value = `echo $count $parameters | awk -F"," '{print $($1)}'`
+	endif
+	if ($count == 1) then
+	    set fields = "$value"
+	else
+	    set fields = "$fields, $value"
+	endif
+    end
+    set count = 0
+    while ($count < $numFields)
+	@ count++
+	if ($count == 1) then
+	    set value = `echo $fields | awk -F"," '{print $1}'`
+	else
+	    set value = `echo $count $fields | awk -F"," '{print $($1)}'`
+	endif
+	if ($count == $numFields) then
+	    echo $value >> $table
+	else
+	    echo -n $value',' >> $table
+	endif
+    end
+    exit 0
+else
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
