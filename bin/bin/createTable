@@ -1,0 +1,120 @@
+#!/bin/tcsh
+# This script creates a table definition.
+# If the table already exists, then save the table to MACSQL_HOME/old
+# The old table is saved as tablename.`date +%Y%m%d_%H%M%S`
+# Example:
+# create table\
+# tableOne (columnA INTEGER NOT NULL, columnB VARCHAR2(30),...)
+set parameters = `echo $*|sed -e 's/ ,/, /g' | sed -e 's/,/, /g'`
+set table = $parameters[2]
+if ($table == ) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (`echo $parameters | grep -w values | wc -l` >= 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+
+# verify that the types in the parameter list are valid
+
+set dbTypes = {integer,float,varchar2,char,boolean,blob,datetime,binary}
+set tabCols = `echo $parameters | awk -F"," '{print NF}'`
+set count = 0
+while ($count < $tabCols)
+    @ count++
+    set validType = 0
+    if ($count == 1) then
+	set type = `echo $count $parameters |& awk -F"(" '{print $2}' |& awk '{print $2}' | sed -e 's/,//'`
+    else
+	set type = `echo $count $parameters |& awk -F"," '{print $($1)}' |& awk '{print $2}' | sed -e 's/,//'`
+    endif
+    foreach dbT ($dbTypes)
+	set type = `echo $type | sed -e s/$dbT\)/$dbT/|sed -e s/$dbT,/$dbT/`
+	set type = `echo $type | sed -e s/\(/\ / | awk '{print $1}'`
+    end
+    set type = `echo $type | sed -e s/\)\)/\)/`
+    set dbTCnt = 0
+    foreach dbType ($dbTypes)
+	if ($validType != 0) then
+	    continue
+	endif
+	@ dbTCnt++
+	if ($type == $dbType) then
+	    set validType = 1
+	endif
+    end
+    if ($validType == 0) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else
+	set validType = 0
+    endif
+end
+if ($parameters[1] == table) then
+# create old directory structure if the table already exists.
+    cd $MACSQL_HOME/db
+    if (! -d tables) then
+	mkdir tables
+    endif
+    if (! -d data) then
+	mkdir data
+    endif
+    if (! -d index) then
+	mkdir index
+    endif
+    if (-f tables/$table) then
+	if (! -d $MACSQL_HOME/old) then
+	    mkdir $MACSQL_HOME/old
+	endif
+	foreach dir (`find . -type d`)
+	    if (! -d $MACSQL_HOME/old/$dir) then
+		mkdir $MACSQL_HOME/old/$dir
+	    endif
+	end
+    endif
+# preserve the old table definition if it exists.
+    set exten = `date +%Y%m%d_%H%M%S`
+    foreach dir (`find . -type d`)
+	if (-f $MACSQL_HOME/old/$dir) then
+	    chmod 755 $MACSQL_HOME/old/$dir
+	endif
+	if (-f $dir/$table) then
+	    chmod 755 $MACSQL_HOME/old/$dir
+	    mv $dir/$table $MACSQL_HOME/old/$dir/$table.$exten
+	    chmod 444 $MACSQL_HOME/old/$dir/$table.$exten
+	    chmod 555 $MACSQL_HOME/old/$dir
+	endif
+    end
+# create the new table definition.
+    set count = 2
+    set numParms = `echo $parameters | awk '{print NF}'`
+    while ($count < $numParms)
+	@ count++
+	if ($count == $numParms) then
+	    echo $parameters[$count]|sed -e 's/\;//' | sed -e 's/%openparen%/\(/g' | sed -e 's/%closeparen%/\)/g' >> tables/$table
+	else
+	    set value = `echo $parameters[$count] | sed -e 's/%openparen%/\(/g' | sed -e 's/%closeparen%/\)/g'`
+	    set countp = `echo $count 1 + p | dc`
+	    set valp = `echo $parameters[$countp] | sed -e 's/%openparen%/\(/g' | sed -e 's/%closeparen%/\)/g'`
+	    if ("$valp" == "(" || "$valp" == ")") then
+		echo -n `echo $parameters[$count] | sed -e 's/%openparen%/\(/g' | sed -e 's/%closeparen%/\)/g'` >> tables/$table
+		continue
+	    endif
+	    if (`echo $value|awk '{print $1}'` == '(' || `echo $value|awk '{print $1}'` == '\)') then
+		echo -n $value >> tables/$table
+	    else
+		set countp = `echo $count 1 + p | dc`
+		if ("$$parameters[countp]" == "%closeparen%") then
+		    echo -n `echo $parameters[$count] | sed -e 's/%openparen%/\(/g' | sed -e 's/%closeparen%/\)/g'` >> tables/$table
+		else
+		    echo -n `echo $parameters[$count] | sed -e 's/%openparen%/\(/g' | sed -e 's/%closeparen%/\)/g'`' ' >> tables/$table
+		endif
+	    endif
+	endif
+    end
+    touch data/$table
+else
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
