@@ -1,0 +1,93 @@
+#!/bin/tcsh
+# delete data from a table... seems straight forward enough
+################
+# The steps are:
+# 1. Initialize
+# 2. Set the table name
+# 3. Set the where clause
+# 4. Delete the rows
+################
+###############
+# 1. Initialize
+###############
+set noglob
+set parameters = `echo $* | sed -e 's/ ,/,/' | sed -e 's/,/, /g'`
+if (`echo "$parameters" | grep from|wc -l` != 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+echo parameters is $parameters
+#wtf was the following line in here for ?
+#set parameters = `echo $parameters | sed -e 's/\!\!\ //'`
+echo parameters is $parameters 
+#############################
+# 2. Start set the table name
+#############################
+set setTable = 0
+set count = 0
+set numFields = `echo $parameters | awk '{print NF}'`
+while ($count < $numFields)
+    @ count++
+#    echo parameters[$count] is $parameters[$count]
+    if ("$parameters[$count]" == "from") then
+	set setTable = 1
+    else if ($setTable == 1) then
+	set setTable = 0
+	set table = $MACSQL_HOME/db/data/$parameters[$count]
+	set tabdef = $MACSQL_HOME/db/tables/$parameters[$count]
+    endif
+end
+if (! -s $table) then
+    set fields = `cat $tabdef`
+    set flag = 0
+    foreach field ($fields)
+	if ($flag == 0) then
+	    set field = `echo $field|sed -e 's/(//' | sed -e 's/)//'`
+	    echo -n $field' '
+	    set flag = 1
+	else
+	    set flag = 0
+	endif
+    end
+    if ($table == $MACSQL_HOME/db/data/dual && $parameters[1] == sysdate) then
+	$MACSQL_HOME/bin/bin/getDate | awk -F"." '{print $4,$5,$6,$2,$3,$7}'
+    else
+	echo ''
+    endif
+    exit 0
+endif
+#echo table name is $table
+
+########################
+# End set the table name
+########################
+set whereParms = `echo $parameters | awk -F"from" '{print $2}'`
+#echo whereParms is $whereParms
+set where = `$MACSQL_HOME/bin/bin/setWhere $whereParms`
+set where = \(\!\($where\)\)
+#echo where is $where 
+##########################
+# End set the where clause
+##########################
+
+##########################
+# 4. Start Delete the rows
+##########################
+set count = 0
+set y = 0
+set lstr = 
+set numFields = $argv[1]
+if ($numFields == *) then
+    set numFields = `cat $tabdef | awk -F"," '{print NF}'`
+else
+    set numFields = `echo $* | awk -F"," '{print NF}'`
+endif
+cat $table | awk -F"," {if\ \($where\)\ print\ \$0}| sed -e 's/ /%20/g' > $table.tmp
+if ($status == 0) then
+    echo \(`diff $table $table.tmp|grep \<\ |wc -l` rows affected\)
+    mv $table.tmp $table
+else
+    echo failure
+    exit 1
+endif
+exit 0
