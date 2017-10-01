@@ -1,0 +1,12 @@
+#!/bin/tcsh
+# backup the data files.
+if ($# != 0) then
+    if ($1 != gold) then
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status
+    else
+	$MACSQL_HOME/bin/bin/backupDB gold
+    endif
+else
+    $MACSQL_HOME/bin/bin/backupDB
+endif
