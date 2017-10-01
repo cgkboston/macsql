@@ -1,0 +1,27 @@
+#!/bin/tcsh
+if ($# < 3) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+
+# Verify the number of open and close parens match.
+set openParens = `echo $* | awk -F"(" '{print NF}'`
+set closeParens = `echo $* | awk -F")" '{print NF}'`
+if ($openParens != $closeParens) then
+    echo the number of open parens must match the number of close parens ...
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+# Verify we have at least one pair of parentheses.
+if ($openParens == 1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+
+if ($argv[1] == into && $argv[3] == values) then
+    $MACSQL_HOME/bin/bin/insertIntoTable $*
+    exit $status
+else
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
