@@ -1,0 +1,25 @@
+#!/bin/tcsh
+# export the specified data file.
+if ($# < 2) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+endif
+if (! -f $MACSQL_HOME/db/tables/$1) then
+    $MACSQL_HOME/bin/help `basename $0`
+    exit $status
+else
+    set d2 = `echo $2 | awk '{print tolower}'`
+    if ($d2 == xml) then
+	$MACSQL_HOME/bin/bin/exportXml $1
+	exit $status
+    else if ($d2 == html) then
+	$MACSQL_HOME/bin/bin/exportHtml $1
+	exit $status
+    else if ($d2 == csv) then
+	$MACSQL_HOME/bin/bin/exportCsv $1
+	exit $status
+    else
+	$MACSQL_HOME/bin/help `basename $0`
+	exit $status	
+    endif
+endif
